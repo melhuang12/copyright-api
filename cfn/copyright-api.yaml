@@ -107,9 +107,8 @@ Resources:
       Code:
         ZipFile: |
           import json
-          def lambda_handler(event, context):
+          def add_copyright(company):
               replacement = ['Oracle','Google','Microsoft','Amazon','Deloitte']
-              company = event['company']
               for key in replacement:
                   if key in company:
                       response = company + ' \u00a9'
@@ -120,9 +119,18 @@ Resources:
                   else:
                       response = company
                       return response
+          def lambda_handler(event, context):
+              company = event['queryStringParameters']['company']
+              response = add_copyright(company)
+              body = {
+                  "company": response
+              }
               return {
-                  'statusCode': 200,
-                  'body': json.dumps(response,ensure_ascii=False)
+                  "isBase64Encoded": False,
+                  "statusCode": 200,
+                  "headers": { "Content-Type": "application/json" },
+                  "body": json.dumps(body,ensure_ascii=False)
+                      #json.dumps(event['company'])
               }
 
   LambdaRole:
