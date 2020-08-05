@@ -11,7 +11,7 @@ set -xe
 #default to region ca-central-1
 #now run aws cli command to deploy, update or delete the stack
 if [[ "$1" == "deploy" ]]; then
-  $AWS cloudformation deploy --stack-name $2 --template-file $3 --region ca-central-1
+  $AWS cloudformation deploy --stack-name $2 --template-file $3 --region eu-west-1
 elif [[ "$1" == "teardown" ]]; then
   $AWS cloudformation delete-stack --stack-name $2
 else

@@ -1,0 +1,154 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This template deploys a lambda for the copyright API
+
+Parameters:
+  ApiGatewayStageName:
+    Type: "String"
+    AllowedPattern: "^[a-z0-9]+$"
+    Default: "call"
+
+Resources:
+  CopyrightApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Name: CopyrightApi
+
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt CopyrightApi.RootResourceId
+      PathPart: 'lambda'
+      RestApiId: !Ref CopyrightApi
+
+  ApiGatewayRootMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: "NONE"
+      HttpMethod: "POST"
+      Integration:
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: "POST"
+        TimeoutInMillis: 29000
+        Type: "AWS"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CopyrightLambda.Arn}/invocations"
+      OperationName: 'lambda'
+      ResourceId: !Ref "ApiGatewayResource"
+      RestApiId: !Ref "CopyrightApi"
+      RequestParameters:
+      MethodResponses:
+        - StatusCode: 200
+
+  ApiGatewayModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      ContentType: 'application/json'
+      RestApiId: !Ref CopyrightApi
+      Schema: {}
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref ApiGatewayDeployment
+      Description: Lambda API Stage v0
+      RestApiId: !Ref CopyrightApi
+      StageName: 'v0'
+      MethodSettings:
+        - HttpMethod: "*"
+          LoggingLevel: INFO
+          ResourcePath: "/*"
+          CachingEnabled: false
+        - HttpMethod: "GET"
+          LoggingLevel: INFO
+          ResourcePath: "/*"
+          CacheTtlInSeconds: 600
+          CachingEnabled: true
+
+  ApiGatewayDeployment:
+    Type: "AWS::ApiGateway::Deployment"
+    DependsOn:
+      - "ApiGatewayRootMethod"
+    Properties:
+      RestApiId: !Ref "CopyrightApi"
+
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 'lambda:*'
+                Resource: !GetAtt CopyrightLambda.Arn
+
+  CopyrightLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.7
+      Role: !GetAtt 'LambdaRole.Arn'
+      Handler: index.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+              replacement = ['Oracle','Google','Microsoft','Amazon','Deloitte']
+              company = event['company']
+              for key in replacement:
+                  if key in company:
+                      response = company + ' \u00a9'
+                      return response
+                  elif company in replacement:
+                      response = company + ' \u00a9'
+                      return response
+                  else:
+                      response = company
+                      return response
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps(response,ensure_ascii=False)
+              }
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  LambdaApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !GetAtt "CopyrightLambda.Arn"
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CopyrightApi}/*/POST/"
+
+Outputs:
+  apiGatewayInvokeURL:
+    Value: !Sub "https://${CopyrightApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiGatewayStageName}"
+
+  LambdaArn:
+    Value: !GetAtt "CopyrightLambda.Arn"
