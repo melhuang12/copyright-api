@@ -130,7 +130,6 @@ Resources:
                   "statusCode": 200,
                   "headers": { "Content-Type": "application/json" },
                   "body": json.dumps(body,ensure_ascii=False)
-                      #json.dumps(event['company'])
               }
 
   LambdaRole:
